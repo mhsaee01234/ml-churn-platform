@@ -1,0 +1,62 @@
+services:
+
+  churn-db:
+    image: postgres:16
+    container_name: churn-db
+    environment:
+      POSTGRES_USER: churnuser
+      POSTGRES_PASSWORD: churnpass
+      POSTGRES_DB: churndb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - churn-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U churnuser -d churndb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  churn-api:
+    build: .
+    container_name: churn-api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://churnuser:churnpass@churn-db:5432/churndb
+    depends_on:
+      churn-db:
+        condition: service_healthy
+    networks:
+      - churn-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: churn-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - churn-network
+    depends_on:
+      - churn-api
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: churn-grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - churn-network
+    depends_on:
+      - prometheus
+
+networks:
+  churn-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
